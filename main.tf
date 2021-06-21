@@ -37,7 +37,7 @@ variable "subnetCIDRblock" {
     type = list(string)
     default = ["10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24"]
 }
-variable "availabilityZone" {
+variable "availabilityZones" {
     description = "A list of availability zones in which to create subnets"
     type = list(string)
     default = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
@@ -72,9 +72,9 @@ resource "aws_subnet" "My_VPC_Subnet" {
   count = length(var.subnetCIDRblock)
     vpc_id = aws_vpc.My_VPC.id
     cidr_block = var.subnetCIDRblock[count.index]
-    availability_zone = var.availabilityZone[count.index]
+    availability_zone = var.availabilityZones[count.index]
     tags = {
-        Name = "Subnet ${var.availabilityZone[count.index]}"
+        Name = "Subnet ${var.availabilityZones[count.index]}"
     }
 }
 
@@ -128,7 +128,7 @@ resource "aws_launch_template" "My_launch_template" {
 resource "aws_autoscaling_group" "My_autoscaling_group" {
     name = "My_autoscaling_group"
     vpc_zone_identifier = [aws_subnet.My_VPC_Subnet[0].id, aws_subnet.My_VPC_Subnet[1].id, aws_subnet.My_VPC_Subnet[2].id]
-    target_group_arns = [aws_lb_target_group.My_target_group.arn]
+    target_group_arns   = [aws_lb_target_group.My_target_group.arn]
     min_size            = var.minSize_maxSize_desiredCapacity[0]
     max_size            = var.minSize_maxSize_desiredCapacity[1]
     desired_capacity    = var.minSize_maxSize_desiredCapacity[2]
@@ -183,6 +183,9 @@ resource "aws_lb" "My_application_load_balancer" {
     tags = {
         Name = "My_application_load_balancer"
     }
+    depends_on = [
+        aws_s3_bucket_policy.My_ALB_logs_bucket_policy
+    ]
 }
 
 # Create an ALB listener
@@ -197,22 +200,25 @@ resource "aws_lb_listener" "My_application_load_balancer_port80_listener" {
 
 # Creating an s3 bucket for the ALB logs
 resource "aws_s3_bucket" "application_load_balancer_logs" {
-  bucket = "mohanad-application-load-balancer-logs"
-  acl    = "private"
-
-  tags = {
-    Name = "application_load_balancer_logs"
+    bucket        = "mohanad-application-load-balancer-logs"
+    acl           = "private"
+    force_destroy = true
+    tags = {
+        Name = "application_load_balancer_logs"
   }
 }
 
 # Blocking public acces on the s3 bucket
 resource "aws_s3_bucket_public_access_block" "s3_bucket_application_load_balancer_logs" {
-  bucket = aws_s3_bucket.application_load_balancer_logs.id
+    bucket = aws_s3_bucket.application_load_balancer_logs.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+    block_public_acls       = true
+    block_public_policy     = true
+    ignore_public_acls      = true
+    restrict_public_buckets = true
+    depends_on = [
+        aws_s3_bucket.application_load_balancer_logs
+    ]
 }
 
 # Creating a bucket policy to allow the ALB to log into the s3 bucket
@@ -234,6 +240,9 @@ resource "aws_s3_bucket_policy" "My_ALB_logs_bucket_policy"{
         }
     ]
 })
+    depends_on = [
+        aws_s3_bucket_public_access_block.s3_bucket_application_load_balancer_logs
+    ]
 }
 
 # Creating security groups
