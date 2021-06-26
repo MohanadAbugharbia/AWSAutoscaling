@@ -15,13 +15,6 @@ provider "aws" {
   region  = var.myregion
 }
 
-# The desired image-id for the ec2 instances
-variable "image_id" {
-    description = "The desired image-id for the ec2 instances"
-    type = string
-    default = "ami-0e0279205d9b58bcf"
-}
-
 # The min, max, and desired instance capacity to configure into the auto scaling group
 variable "minSize_maxSize_desiredCapacity" {
     description = "The minimum size, maximum size, and desired capacity of ec2 instances to configure into the auto scaling group"
@@ -46,6 +39,15 @@ variable "availabilityZones" {
 variable "destinationCIDRblock" {
     type = string
     default = "0.0.0.0/0"   
+}
+
+# Pulls out an ami from the account that is running this code where the description is AWSAutoscaling
+data "aws_ami" "ami_image_for_ec2_instances" {
+    owners = [ "self" ]
+    filter {
+      name = "description"
+      values = ["AWSAutoscaling"]
+    }
 }
 
 # Outputs the dns name of the application load balancer
@@ -112,7 +114,8 @@ resource "aws_route_table_association" "My_VPC_route_rable_association" {
 # Create the launch template
 resource "aws_launch_template" "My_launch_template" {
     name = "My_launch_template"
-    image_id = var.image_id
+    //image_id = var.image_id
+    image_id = data.aws_ami.ami_image_for_ec2_instances.image_id
     instance_type = "t2.micro"
     key_name = "Key-pair-aws"
     instance_market_options {
